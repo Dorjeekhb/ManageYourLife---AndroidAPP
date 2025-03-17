@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- RecyclerView con animación de layout -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerTareas"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp"
+        android:layoutAnimation="@anim/layout_animation_fade_in" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabFilter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="@string/filter_tasks"
+        app:layout_anchor="@id/recyclerTareas"
+        app:layout_anchorGravity="bottom|start"
+        android:layout_margin="16dp"
+        app:srcCompat="@drawable/list" />
+
+    <!-- Botón flotante para agregar tarea, usa un icono que se adapte a un estilo lofi/cozy -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAgregar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="@string/add_task"
+        app:layout_anchor="@id/recyclerTareas"
+        app:layout_anchorGravity="bottom|end"
+        android:layout_margin="16dp"
+        app:srcCompat="@drawable/add" />
+    <!-- Reemplaza @drawable/ic_add por un icono más acorde si lo deseas -->
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
