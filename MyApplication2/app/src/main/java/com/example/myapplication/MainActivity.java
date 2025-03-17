@@ -11,26 +11,36 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.work.Data;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
-
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.graphics.Rect;
+import android.os.Build;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Debug;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.AnimationUtils;
+import android.view.animation.OvershootInterpolator;
 import android.widget.ArrayAdapter;
+import android.widget.CalendarView;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import java.text.SimpleDateFormat;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -50,6 +60,28 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Inicialización de vistas
+        recyclerTareas = findViewById(R.id.recyclerTareas);
+        fabAgregar = findViewById(R.id.fabAgregar);
+        fabFilter = findViewById(R.id.fabFilter);
+
+        // Configuración del RecyclerView (Punto 3)
+        recyclerTareas.setLayoutManager(new LinearLayoutManager(this));
+        recyclerTareas.addItemDecoration(new RecyclerView.ItemDecoration() {
+            public void getItemOffsets(@NonNull Rect outRect,
+                                       @NonNull View view,
+                                       @NonNull RecyclerView parent,
+                                       @NonNull RecyclerView.State state) {
+                int position = parent.getChildAdapterPosition(view);
+                // Reducir el espacio entre elementos
+                outRect.set(position * 2, position * 3, 0, 0);
+            }
+        });
+        recyclerTareas.setAdapter(adaptador);
+
         // Modo oscuro/claro
         SharedPreferences themePrefs = getSharedPreferences("ThemePrefs", MODE_PRIVATE);
         boolean isDarkMode = themePrefs.getBoolean("darkMode", true);
@@ -58,9 +90,9 @@ public class MainActivity extends AppCompatActivity {
         } else {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         }
+        checkNotificationPermission();
 
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+
 
         // Cargar tareas
         loadTasks();
@@ -73,7 +105,20 @@ public class MainActivity extends AppCompatActivity {
 
         recyclerTareas.setLayoutManager(new LinearLayoutManager(this));
         recyclerTareas.setItemAnimator(new DefaultItemAnimator());
-        adaptador = new TareaAdapter(listaTareas);
+        // Configuración del adaptador
+        // Al crear el adaptador
+        adaptador = new TareaAdapter(listaTareas, 0, 0f);
+        adaptador.setOnTaskClickListener(new TareaAdapter.OnTaskClickListener() {
+            @Override
+            public void onItemClick(Tarea tarea, int position) {
+                // Animación normal de la tarjeta
+            }
+
+            @Override
+            public void onDetailsClick(Tarea tarea, int position) {
+                mostrarDialogoEditarTarea(tarea, position); // Tu método de edición
+            }
+        });
         recyclerTareas.setAdapter(adaptador);
 
         setupSwipeToDelete();
@@ -87,26 +132,65 @@ public class MainActivity extends AppCompatActivity {
         // FAB Filtrar (restablece lista original)
         fabFilter.setOnClickListener(v -> {
             v.startAnimation(AnimationUtils.loadAnimation(MainActivity.this, R.anim.fab_bounce));
-            listaTareas.clear();
-            listaTareas.addAll(allTasks);
-            adaptador.notifyDataSetChanged();
-            Toast.makeText(MainActivity.this, "Mostrando todas las tareas", Toast.LENGTH_SHORT).show();
+            mostrarDialogoFiltrarTareas(); // Nuevo método para mostrar opciones de filtrado
         });
-
-        // Editar tarea al tocar
-        adaptador.setOnTaskClickListener((tarea, position) -> mostrarDialogoEditarTarea(tarea, position));
     }
 
+    private void mostrarDialogoFiltrarTareas() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_filter, null);
+        builder.setView(dialogView);
+
+        Spinner spinnerPriority = dialogView.findViewById(R.id.spinnerFilterPriority);
+        EditText etLabel = dialogView.findViewById(R.id.etFilterLabel);
+        CalendarView calendarView = dialogView.findViewById(R.id.calendarView);
+
+        // Configurar spinner
+        ArrayAdapter<Priority> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, Priority.values());
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerPriority.setAdapter(adapter);
+
+        // Manejar selección de fecha
+        final SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+        final Date[] selectedDate = {null};
+
+        calendarView.setOnDateChangeListener((view, year, month, dayOfMonth) -> {
+            Calendar cal = Calendar.getInstance();
+            cal.set(year, month, dayOfMonth);
+            selectedDate[0] = cal.getTime();
+        });
+
+        builder.setPositiveButton("Filtrar", (dialog, which) -> {
+            Priority prioridad = (Priority) spinnerPriority.getSelectedItem();
+            String label = etLabel.getText().toString().trim();
+            String fecha = selectedDate[0] != null ? sdf.format(selectedDate[0]) : "";
+
+            filtrarTareas(
+                    prioridad.equals(Priority.NONE) ? null : prioridad,
+                    label,
+                    fecha
+            );
+        });
+
+        builder.setNegativeButton("Cancelar", null);
+        builder.setNeutralButton("Limpiar fecha", (dialog, which) -> selectedDate[0] = null);
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
     @Override
     protected void onPause() {
         super.onPause();
         saveTasks();
     }
-
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
+    }
     // ---------------------------------------------------------------------------------------------
     // Método para programar la notificación 24h antes
     // ---------------------------------------------------------------------------------------------
-    /*private void scheduleWorkReminder(Tarea tarea) {
+    private void scheduleWorkReminder(Tarea tarea) {
         if (tarea.getFechaPlazo() == null) return;
         // Calcular tiempo para 24h antes de la fecha de plazo
         long triggerTime = tarea.getFechaPlazo().getTime() - 24 * 60 * 60 * 1000;
@@ -125,25 +209,40 @@ public class MainActivity extends AppCompatActivity {
                 .build();
 
         WorkManager.getInstance(this).enqueue(request);
-    }*/
-
-    private void scheduleWorkReminder(Tarea tarea) {
-        if (tarea.getFechaPlazo() == null) return;
-        // 50 sec
-        long delay = 60 * 1000L;
-        int notificationId = (int) System.currentTimeMillis();
-        Data inputData = new Data.Builder()
-                .putString("tituloTarea", tarea.getTitulo())
-                .putInt("notificationId", notificationId)
-                .build();
-        OneTimeWorkRequest workRequest = new OneTimeWorkRequest.Builder(TaskReminderWorker.class)
-                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-                .setInputData(inputData)
-                .build();
-        WorkManager.getInstance(this).enqueue(workRequest);
     }
 
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        // Añadir esta línea si quieres un botón adicional en el menú
+        menu.add(0, R.id.action_toggle_view, 0, "Cambiar vista");
+        return true;
+    }
+
+    // Dentro de la clase MainActivity, después del onCreate()
+    private void toggleViewMode() {
+        if (recyclerTareas.getLayoutManager() instanceof CardStackLayoutManager) {
+            recyclerTareas.setLayoutManager(new LinearLayoutManager(this));
+        } else {
+            recyclerTareas.setLayoutManager(new CardStackLayoutManager(this));
+        }
+        adaptador.notifyDataSetChanged();
+    }
+
+    // Dentro de la clase MainActivity
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.action_toggle_view) {
+            toggleViewMode();
+            return true;
+        }
+        // Maneja otros ítems del menú aquí...
+
+        return super.onOptionsItemSelected(item);
+    }
     // ---------------------------------------------------------------------------------------------
     // Diálogo para agregar tarea
     // ---------------------------------------------------------------------------------------------
@@ -211,8 +310,31 @@ public class MainActivity extends AppCompatActivity {
 
             listaTareas.add(nuevaTarea);
             allTasks.add(nuevaTarea);
+            int newPosition = listaTareas.size() - 1;
             adaptador.notifyItemInserted(listaTareas.size() - 1);
             // Reproducir el sonido addedtask.mp3
+            // Animación de superposición al añadir nueva tarjeta (Punto 4)
+            recyclerTareas.post(() -> {
+                if (newPosition >= 0 && newPosition < listaTareas.size()) {
+                    recyclerTareas.smoothScrollToPosition(newPosition);
+
+                    View newCard = recyclerTareas.getLayoutManager().findViewByPosition(newPosition);
+                    if (newCard != null) {
+                        // Configuración inicial para animación
+                        newCard.setTranslationY(-100); // Desplazamiento inicial hacia arriba
+                        newCard.setAlpha(0.5f); // Transparencia inicial
+                        newCard.setZ(newPosition * 5); // Asegurar profundidad
+
+                        // Animación de entrada
+                        newCard.animate()
+                                .translationY(0)
+                                .alpha(1f)
+                                .setDuration(300)
+                                .setInterpolator(new OvershootInterpolator(1.2f))
+                                .start();
+                    }
+                }
+            });
             MediaPlayer mediaPlayer = MediaPlayer.create(MainActivity.this, R.raw.addedtask);
             mediaPlayer.start();
             // Liberar el MediaPlayer al finalizar
@@ -317,24 +439,31 @@ public class MainActivity extends AppCompatActivity {
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
 
         for (Tarea t : allTasks) {
-            boolean cumplePrioridad = (t.getPrioridad() == prioridad);
+            boolean cumplePrioridad = (prioridad == null) || (t.getPrioridad() == prioridad);
             boolean cumpleLabel = label.isEmpty() || t.getLabel().equalsIgnoreCase(label);
             boolean cumpleFecha = true;
+
             if (!fechaStr.isEmpty()) {
-                if (t.getFechaPlazo() != null) {
-                    String tareaFechaStr = sdf.format(t.getFechaPlazo());
-                    cumpleFecha = tareaFechaStr.equals(fechaStr);
-                } else {
+                if (t.getFechaPlazo() == null) {
                     cumpleFecha = false;
+                } else {
+                    String fechaTarea = sdf.format(t.getFechaPlazo());
+                    cumpleFecha = fechaTarea.equals(fechaStr);
                 }
             }
+
             if (cumplePrioridad && cumpleLabel && cumpleFecha) {
                 tareasFiltradas.add(t);
             }
         }
+
         listaTareas.clear();
         listaTareas.addAll(tareasFiltradas);
         adaptador.notifyDataSetChanged();
+
+        String mensaje = tareasFiltradas.size() + " tareas encontradas";
+        if (!fechaStr.isEmpty()) mensaje += "\nFecha: " + fechaStr;
+        Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show();
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -366,6 +495,35 @@ public class MainActivity extends AppCompatActivity {
         adaptador.notifyDataSetChanged();
     }
 
+    // Método para verificar y solicitar permiso
+    private void checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+
+                // Explicación opcional (si es necesario)
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                        Manifest.permission.POST_NOTIFICATIONS)) {
+                    new AlertDialog.Builder(this)
+                            .setTitle("Permiso requerido")
+                            .setMessage("Este permiso es necesario para recordarte tus tareas")
+                            .setPositiveButton("OK", (d, w) -> requestPermission())
+                            .setNegativeButton("Cancelar", null)
+                            .show();
+                } else {
+                    requestPermission();
+                }
+            }
+        }
+    }
+
+    private void requestPermission() {
+        ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                1001 // Código de solicitud
+        );
+    }
     // ---------------------------------------------------------------------------------------------
     // Swipe para eliminar con confirmación
     // ---------------------------------------------------------------------------------------------
@@ -384,6 +542,12 @@ public class MainActivity extends AppCompatActivity {
                         new AlertDialog.Builder(MainActivity.this)
                                 .setMessage("¿Estás seguro de eliminar la tarea?")
                                 .setPositiveButton("Sí", (dialog, which) -> {
+                                    MediaPlayer mediaPlayer = MediaPlayer.create(MainActivity.this, R.raw.delete);
+                                    mediaPlayer.start();
+                                    // Liberar el MediaPlayer al finalizar
+                                    mediaPlayer.setOnCompletionListener(mp -> {
+                                        mp.release();
+                                    });
                                     View itemView = recyclerTareas.findViewHolderForAdapterPosition(position).itemView;
                                     itemView.startAnimation(AnimationUtils.loadAnimation(MainActivity.this, R.anim.slide_out_right));
                                     itemView.postDelayed(() -> {

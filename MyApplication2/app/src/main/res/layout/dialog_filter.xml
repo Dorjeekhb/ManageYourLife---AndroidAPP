@@ -2,36 +2,39 @@
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="match_parent"
+    android:fillViewport="true">
 
     <LinearLayout
-        android:orientation="vertical"
-        android:padding="16dp"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
 
         <!-- Spinner para prioridad -->
         <Spinner
             android:id="@+id/spinnerFilterPriority"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
+            android:layout_height="wrap_content"
+            android:theme="@style/BlackSpinnerText"
+            android:background="@android:drawable/spinner_dropdown_background"/>
         <!-- EditText para filtrar por etiqueta -->
         <EditText
             android:id="@+id/etFilterLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Etiqueta"
-            android:layout_marginTop="8dp"/>
+            android:hint="Filtrar por etiqueta"
+            android:layout_marginTop="16dp"
+            android:inputType="text"/>
 
-        <!-- EditText para la fecha de filtro -->
-        <EditText
-            android:id="@+id/etFilterDate"
+        <!-- CalendarView integrado -->
+        <CalendarView
+            android:id="@+id/calendarView"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Seleccionar fecha"
-            android:focusable="false"
-            android:layout_marginTop="8dp"/>
+            android:layout_height="300dp"
+            android:layout_marginTop="16dp"
+            android:dateTextAppearance="@style/CalendarDateText"
+            android:weekDayTextAppearance="@style/CalendarWeekDay"/>
 
     </LinearLayout>
 </ScrollView>

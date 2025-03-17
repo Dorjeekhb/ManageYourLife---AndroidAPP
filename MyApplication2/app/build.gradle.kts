@@ -40,6 +40,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.8.9")
     implementation("androidx.work:work-runtime:2.8.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("com.google.android.material:material:1.9.0")
     implementation(libs.room.runtime.android)
     implementation(libs.firebase.crashlytics.buildtools)
     implementation(libs.work.runtime)

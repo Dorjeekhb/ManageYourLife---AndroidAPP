@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Task Gamification</string>
+    <string name="app_name">TODO</string>
     <string name="add_task">Add Task</string>
     <string name="hint_title">Task Title</string>
     <string name="hint_description">Task Description</string>
@@ -10,4 +10,5 @@
     <string name="sort_by_label">Sort by Label</string>
     <string name="profile">Profile</string>
     <string name="filter_tasks">Filtrar Tareas</string>
+    <item name="action_toggle_view" type="id"/>
 </resources>

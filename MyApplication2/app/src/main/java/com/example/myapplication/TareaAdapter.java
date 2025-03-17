@@ -1,14 +1,15 @@
 package com.example.myapplication;
 
+import android.graphics.Rect;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.OvershootInterpolator;
 import android.widget.CheckBox;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
@@ -18,18 +19,22 @@ public class TareaAdapter extends RecyclerView.Adapter<TareaAdapter.TareaViewHol
 
     private List<Tarea> listaTareas;
     private OnTaskClickListener listener;
+    private final int maxStackOffset;
+    private final float rotationAngle;
 
-    // Interfaz para comunicar clics al Activity (para editar la tarea)
+    public TareaAdapter(List<Tarea> listaTareas, int maxStackOffsetDp, float rotationAngle) {
+        this.listaTareas = listaTareas;
+        this.maxStackOffset = maxStackOffsetDp;
+        this.rotationAngle = rotationAngle;
+    }
+
     public interface OnTaskClickListener {
         void onItemClick(Tarea tarea, int position);
+        void onDetailsClick(Tarea tarea, int position);
     }
 
     public void setOnTaskClickListener(OnTaskClickListener listener) {
         this.listener = listener;
-    }
-
-    public TareaAdapter(List<Tarea> listaTareas) {
-        this.listaTareas = listaTareas;
     }
 
     @NonNull
@@ -42,8 +47,26 @@ public class TareaAdapter extends RecyclerView.Adapter<TareaAdapter.TareaViewHol
 
     @Override
     public void onBindViewHolder(@NonNull TareaViewHolder holder, int position) {
-        Tarea tareaActual = listaTareas.get(position);
-        holder.bind(tareaActual);
+        holder.bind(listaTareas.get(position));
+        applyStackEffect(holder.itemView, position);
+    }
+
+    private void applyStackEffect(View itemView, int position) {
+        float density = itemView.getResources().getDisplayMetrics().density;
+        int maxOffsetPx = (int) (maxStackOffset * density);
+
+        // Aumentar el desplazamiento por cada tarjeta
+        int offsetStep = maxOffsetPx / 3; // Más paso por posición
+
+        // Reducir el máximo de desplazamiento para forzar superposición
+        int calculatedOffsetX = Math.min(position * offsetStep, maxOffsetPx);
+        int calculatedOffsetY = Math.min(position * (offsetStep * 2), (int)(maxOffsetPx * 1.5));
+
+        // Aplicar superposición
+        itemView.setTranslationX(calculatedOffsetX);
+        itemView.setTranslationY(calculatedOffsetY);
+        itemView.setRotation(position % 2 == 0 ? -rotationAngle : rotationAngle);
+        itemView.setZ(position * 5); // Mayor diferencia de profundidad
     }
 
     @Override
@@ -52,14 +75,11 @@ public class TareaAdapter extends RecyclerView.Adapter<TareaAdapter.TareaViewHol
     }
 
     class TareaViewHolder extends RecyclerView.ViewHolder {
-        private CheckBox checkCompleted;
-        private TextView tvTitulo, tvDescripcion;
-        private TextView tvPriorityValue, tvLabelValue;
-        private View viewLabelColor;
-
-        // Para el mini-calendario
-        private TextView tvDia, tvMes;
-
+        private final CheckBox checkCompleted;
+        private final TextView tvTitulo, tvDescripcion;
+        private final TextView tvPriorityValue, tvLabelValue, btnDetalles;
+        private final View viewLabelColor;
+        private final TextView tvDia, tvMes;
         private boolean isBinding;
 
         public TareaViewHolder(@NonNull View itemView) {
@@ -70,63 +90,98 @@ public class TareaAdapter extends RecyclerView.Adapter<TareaAdapter.TareaViewHol
             tvPriorityValue = itemView.findViewById(R.id.tvPriorityValue);
             tvLabelValue = itemView.findViewById(R.id.tvLabelValue);
             viewLabelColor = itemView.findViewById(R.id.viewLabelColor);
-
             tvDia = itemView.findViewById(R.id.tvDia);
             tvMes = itemView.findViewById(R.id.tvMes);
+            btnDetalles = itemView.findViewById(R.id.btnDetalles);
 
-            // Listener para detectar clic en el ítem y notificar al Activity
-            itemView.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (listener != null) {
-                        int pos = getAdapterPosition();
-                        if (pos != RecyclerView.NO_POSITION) {
-                            listener.onItemClick(listaTareas.get(pos), pos);
-                        }
-                    }
-                }
-            });
+            setupTouchInteractions();
+            setupClickListeners();
+            setupDetailsButton();
+        }
 
-            // Listener para el CheckBox: al marcar, se pueden sumar puntos, etc.
-            checkCompleted.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (!isBinding) {
-                    int position = getAdapterPosition();
-                    if (position != RecyclerView.NO_POSITION) {
-                        Tarea tarea = listaTareas.get(position);
-                        boolean wasCompleted = tarea.isCompletada();
-                        tarea.setCompletada(isChecked);
-                        // Aquí puedes agregar lógica para sumar puntos, etc.
-                    }
+        private void setupDetailsButton() {
+            btnDetalles.setOnClickListener(v -> {
+                if (listener != null && getAdapterPosition() != RecyclerView.NO_POSITION) {
+                    listener.onDetailsClick(listaTareas.get(getAdapterPosition()), getAdapterPosition());
                 }
             });
         }
 
+        private void setupTouchInteractions() {
+            itemView.setOnTouchListener((v, event) -> {
+                Rect rect = new Rect();
+                btnDetalles.getGlobalVisibleRect(rect);
+
+                if (rect.contains((int) event.getRawX(), (int) event.getRawY())) {
+                    return false;
+                }
+
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        animateCard(v, 12f, 1.03f);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        animateCard(v, 6f, 1f);
+                        v.performClick();
+                        return true;
+                }
+                return false;
+            });
+        }
+
+        private void setupClickListeners() {
+            itemView.setOnClickListener(v -> {
+                if (listener != null && getAdapterPosition() != RecyclerView.NO_POSITION) {
+                    listener.onItemClick(listaTareas.get(getAdapterPosition()), getAdapterPosition());
+                }
+            });
+
+            checkCompleted.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (!isBinding && getAdapterPosition() != RecyclerView.NO_POSITION) {
+                    listaTareas.get(getAdapterPosition()).setCompletada(isChecked);
+                }
+            });
+        }
+
+        private void animateCard(View view, float elevation, float scale) {
+            view.animate()
+                    .z(elevation)
+                    .translationZ(elevation)
+                    .scaleX(scale)
+                    .scaleY(scale)
+                    .setDuration(100)
+                    .setInterpolator(new OvershootInterpolator(1.2f))
+                    .start();
+        }
+
         public void bind(Tarea tarea) {
             isBinding = true;
+            setTaskData(tarea);
+            setDateInfo(tarea);
+            isBinding = false;
+        }
+
+        private void setTaskData(Tarea tarea) {
             checkCompleted.setChecked(tarea.isCompletada());
             tvTitulo.setText(tarea.getTitulo());
             tvDescripcion.setText(tarea.getDescripcion());
             tvPriorityValue.setText(tarea.getPrioridad().name());
             tvLabelValue.setText(tarea.getLabel());
             viewLabelColor.setBackgroundColor(tarea.getLabelColor());
+        }
 
-            // Mostrar la fecha de plazo en formato de mini-calendario
+        private void setDateInfo(Tarea tarea) {
             if (tarea.getFechaPlazo() != null) {
                 Calendar cal = Calendar.getInstance();
                 cal.setTime(tarea.getFechaPlazo());
-                int dayOfMonth = cal.get(Calendar.DAY_OF_MONTH);
-
-                tvDia.setText(String.valueOf(dayOfMonth));
-
-                // Convertir el número de mes a abreviatura (por ejemplo, "ENE")
-                SimpleDateFormat sdfMonth = new SimpleDateFormat("MMM", Locale.getDefault());
-                String monthAbbrev = sdfMonth.format(cal.getTime()).toUpperCase();
-                tvMes.setText(monthAbbrev);
+                tvDia.setText(String.valueOf(cal.get(Calendar.DAY_OF_MONTH)));
+                tvMes.setText(new SimpleDateFormat("MMM", Locale.getDefault())
+                        .format(cal.getTime()).toUpperCase());
             } else {
                 tvDia.setText("--");
                 tvMes.setText("N/A");
             }
-            isBinding = false;
         }
     }
 }
